@@ -41,6 +41,7 @@
   .btn.primary { background: var(--primary); border-color: var(--primary); color: #fff; }
   .btn.danger { background: #fff; border-color: #f0c4bd; color: #b3261e; }
   .btn.block { margin-top: 12px; }
+  .text-input { width: 100%; padding: 12px; border: 1px solid var(--border); border-radius: 12px; font: inherit; background: var(--surface); color: var(--text); }
 
   .chip { display: inline-flex; align-items: center; padding: 3px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; line-height: 1.4; background: #eef3f0; color: #39554a; }
   .chip.society { background: #e8f0fb; color: #1f5faa; }
@@ -151,7 +152,7 @@
   const STORAGE_KEY = 'gi-literature-v1';
   const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
-  function defaultState() { return { papers: {}, orders: {}, sortModes: {}, topicFilters: {}, activitySort: 'old', activityFilter: 'all' }; }
+  function defaultState() { return { papers: {}, orders: {}, sortModes: {}, topicFilters: {}, activitySort: 'old', activityFilter: 'all', topicContent: {}, links: {} }; }
   function load() {
     try { const raw = localStorage.getItem(STORAGE_KEY); if (raw) return Object.assign(defaultState(), JSON.parse(raw)); } catch (e) {}
     return defaultState();
@@ -161,7 +162,9 @@
 
   let currentTopicId = null;
   let currentPaperId = null;
-  let editing = { paper: null, field: null };
+  let editing = { paper: null, topic: null, field: null };
+  let topicTabTopic = null;
+  let currentTopicTab = 'studies';
   let deferredPrompt = null;
 
   // ---- helpers ----
@@ -171,6 +174,9 @@
   function paperTopic(p) { for (const d of DOMAINS) for (const t of d.topics) if (t.papers.some(x => x.id === p.id)) return t; return null; }
   function findDomainByTopic(tid) { return DOMAINS.find(d => d.topics.some(t => t.id === tid)); }
   function allPapers() { const arr = []; DOMAINS.forEach(d => d.topics.forEach(t => t.papers.forEach(p => arr.push(p)))); return arr; }
+  function isLinkOnlyPaper(p) { const t = paperTopic(p); const d = t ? findDomainByTopic(t.id) : null; return !!(d && d.id === 'core'); }
+  function getPaperLink(p) { return state.links[p.id] || p.link || ''; }
+  function topicSummary(topicId) { return (state.topicContent[topicId] || {}).summary || ''; }
 
   function meta(paperId) {
     if (!state.papers[paperId]) state.papers[paperId] = { lastOpened: null, lastReviewed: null, fullText: '', summary: '' };
@@ -192,7 +198,13 @@
 
   function domainStats(d) {
     let total = 0, uploaded = 0, reviewed = 0;
-    d.topics.forEach(t => t.papers.forEach(p => { total++; if (hasContent(p)) uploaded++; if (readStatus(p) === 'reviewed') reviewed++; }));
+    d.topics.forEach(t => t.papers.forEach(p => {
+      total++;
+      if (!isLinkOnlyPaper(p)) {
+        if (hasContent(p)) uploaded++;
+        if (readStatus(p) === 'reviewed') reviewed++;
+      }
+    }));
     return { topics: d.topics.length, total, uploaded, reviewed };
   }
   function domainTotals() {
@@ -303,10 +315,13 @@
       '<div class="domain-list">' +
       DOMAINS.map(d => {
         const s = domainStats(d);
+        const metaText = d.id === 'core'
+          ? s.topics + ' topics · ' + s.total + ' links'
+          : s.topics + ' topics · ' + s.uploaded + '/' + s.total + ' uploaded · ' + s.reviewed + ' reviewed';
         return '<a class="domain-card" href="#/domain/' + d.id + '">' +
           '<span class="domain-icon">' + d.icon + '</span>' +
           '<span class="domain-body"><span class="domain-name">' + esc(d.name) + '</span>' +
-          '<span class="domain-meta">' + s.topics + ' topics · ' + s.uploaded + '/' + s.total + ' uploaded · ' + s.reviewed + ' reviewed</span></span>' +
+          '<span class="domain-meta">' + metaText + '</span></span>' +
           '<span class="arrow">›</span></a>';
       }).join('') + '</div>';
   }
@@ -321,9 +336,13 @@
       d.topics.map(t => {
         let total = 0, uploaded = 0, reviewed = 0;
         t.papers.forEach(p => { total++; if (hasContent(p)) uploaded++; if (readStatus(p) === 'reviewed') reviewed++; });
+        const hasTs = !!(state.topicContent[t.id] || {}).summary && state.topicContent[t.id].summary.trim() !== '';
+        const metaLine = d.id === 'core'
+          ? t.papers.length + ' links'
+          : uploaded + '/' + total + ' uploaded · ' + reviewed + ' reviewed' + (hasTs ? ' · Topic summary ✓' : '');
         return '<a class="topic-card" href="#/topic/' + t.id + '">' +
           '<span class="topic-name">' + esc(t.name) + '</span>' +
-          '<span class="domain-meta">' + uploaded + '/' + total + ' uploaded · ' + reviewed + ' reviewed</span></a>';
+          '<span class="domain-meta">' + metaLine + '</span></a>';
       }).join('') + '</div>';
   }
 
@@ -361,67 +380,130 @@
   function renderTopic(id) {
     const t = findTopic(id);
     if (!t) { location.hash = '#/'; return; }
+    const d = findDomainByTopic(id);
+    const isCore = d && d.id === 'core';
+    if (topicTabTopic !== id) { topicTabTopic = id; currentTopicTab = 'studies'; }
     currentTopicId = id;
     setHeader(t.name, true);
-    const mode = state.sortModes[id] || 'uploaded';
-    const filt = state.topicFilters[id] || { society: 'all', status: 'all' };
-    let papers = sortTopicPapers(t).filter(p => statusFilter(p, filt.status));
-    if (filt.society !== 'all') papers = papers.filter(p => p.society === filt.society);
-    const societies = [...new Set(t.papers.map(p => p.society))];
 
-    const sortOptions = [
-      ['uploaded', 'Uploaded first'], ['original', 'Original sequence'], ['lastNew', 'Last opened: newest'],
-      ['lastOld', 'Last opened: oldest'], ['yearNew', 'Year: newest'], ['society', 'Society: A–Z'], ['custom', 'Custom (drag)']
-    ].map(o => '<option value="' + o[0] + '"' + (o[0] === mode ? ' selected' : '') + '>' + o[1] + '</option>').join('');
+    let html = '<h2>' + esc(t.name) + '</h2>';
 
-    const societyOptions = '<option value="all"' + (filt.society === 'all' ? ' selected' : '') + '>All societies</option>' +
-      societies.map(s => '<option value="' + esc(s) + '"' + (filt.society === s ? ' selected' : '') + '>' + esc(s) + '</option>').join('');
+    if (!isCore) {
+      const hasTs = !!topicSummary(id).trim();
+      html += '<div class="tabs">' +
+        '<button class="tab' + (currentTopicTab === 'studies' ? ' active' : '') + '" data-topic-tab="studies" type="button">Studies (' + t.papers.length + ')</button>' +
+        '<button class="tab' + (currentTopicTab === 'summary' ? ' active' : '') + '" data-topic-tab="summary" type="button">Integrated summary' + (hasTs ? ' ✓' : '') + '</button></div>';
+    }
 
-    const statusOptions = [
-      ['all', 'All statuses'], ['uploaded', 'Uploaded'], ['blank', 'Not uploaded'], ['unread', 'Unread'], ['inprogress', 'In progress'], ['reviewed', 'Reviewed']
-    ].map(o => '<option value="' + o[0] + '"' + (o[0] === filt.status ? ' selected' : '') + '>' + o[1] + '</option>').join('');
+    if (isCore || currentTopicTab === 'studies') {
+      if (isCore) {
+        html += '<div id="paper-list" class="paper-list">' +
+          t.papers.map(p => {
+            const link = getPaperLink(p);
+            return '<div class="paper-row" data-pid="' + p.id + '">' +
+              '<a class="paper-main" href="#/paper/' + p.id + '">' +
+              '<span class="paper-title">' + esc(p.title) + '</span>' +
+              '<span class="paper-chips">' +
+              '<span class="chip society">' + esc(p.society) + '</span>' +
+              (p.year ? '<span class="chip year">' + p.year + '</span>' : '') +
+              p.tags.map(tag => '<span class="chip tag">' + (tag === '★' ? '★' : esc(tag)) + '</span>').join('') +
+              (link ? '<span class="chip uploaded">Link saved</span>' : '<span class="chip blank">No link yet</span>') +
+              '</span></a></div>';
+          }).join('') + '</div>';
+      } else {
+        const mode = state.sortModes[id] || 'uploaded';
+        const filt = state.topicFilters[id] || { society: 'all', status: 'all' };
+        let papers = sortTopicPapers(t).filter(p => statusFilter(p, filt.status));
+        if (filt.society !== 'all') papers = papers.filter(p => p.society === filt.society);
+        const societies = [...new Set(t.papers.map(p => p.society))];
 
+        const sortOptions = [
+          ['uploaded', 'Uploaded first'], ['original', 'Original sequence'], ['lastNew', 'Last opened: newest'],
+          ['lastOld', 'Last opened: oldest'], ['yearNew', 'Year: newest'], ['society', 'Society: A–Z'], ['custom', 'Custom (drag)']
+        ].map(o => '<option value="' + o[0] + '"' + (o[0] === mode ? ' selected' : '') + '>' + o[1] + '</option>').join('');
+
+        const societyOptions = '<option value="all"' + (filt.society === 'all' ? ' selected' : '') + '>All societies</option>' +
+          societies.map(s => '<option value="' + esc(s) + '"' + (filt.society === s ? ' selected' : '') + '>' + esc(s) + '</option>').join('');
+
+        const statusOptions = [
+          ['all', 'All statuses'], ['uploaded', 'Uploaded'], ['blank', 'Not uploaded'], ['unread', 'Unread'], ['inprogress', 'In progress'], ['reviewed', 'Reviewed']
+        ].map(o => '<option value="' + o[0] + '"' + (o[0] === filt.status ? ' selected' : '') + '>' + o[1] + '</option>').join('');
+
+        html += '<div class="toolbar">' +
+          '<select id="sort-select" class="select">' + sortOptions + '</select>' +
+          '<select id="society-select" class="select">' + societyOptions + '</select>' +
+          '<select id="status-select" class="select">' + statusOptions + '</select></div>' +
+          (mode === 'custom' ? '<p class="hint">Tap and hold the ⠿ handle to drag and reorder. Order is saved automatically.</p>' : '') +
+          '<div id="paper-list" class="paper-list">' +
+          papers.map(p => {
+            const m = state.papers[p.id] || {};
+            const st = readStatus(p);
+            const up = hasContent(p);
+            return '<div class="paper-row" data-pid="' + p.id + '">' +
+              (mode === 'custom' ? '<span class="drag-handle" aria-hidden="true">⠿</span>' : '') +
+              '<a class="paper-main" href="#/paper/' + p.id + '">' +
+              '<span class="paper-title">' + esc(p.title) + '</span>' +
+              '<span class="paper-chips">' +
+              '<span class="chip society">' + esc(p.society) + '</span>' +
+              (p.year ? '<span class="chip year">' + p.year + '</span>' : '') +
+              p.tags.map(tag => '<span class="chip tag">' + (tag === '★' ? '★' : esc(tag)) + '</span>').join('') +
+              '<span class="chip status-' + st + '">' + statusLabel(st) + '</span>' +
+              (up ? '<span class="chip uploaded">Uploaded</span>' : '<span class="chip blank">Blank</span>') +
+              '</span>' +
+              '<span class="paper-dates">Reviewed: ' + fmtDate(m.lastReviewed) + ' · Opened: ' + fmtDate(m.lastOpened) + '</span>' +
+              '</a></div>';
+          }).join('') + '</div>' +
+          (papers.length === 0 ? '<p class="hint">No studies match the filter.</p>' : '');
+
+        if (mode === 'custom') enableCustomDrag(document.getElementById('paper-list'), t.id);
+      }
+    } else {
+      const ts = topicSummary(id);
+      html += '<div class="tab-panel">' +
+        (ts.trim() ? '<div class="markdown">' + mdToHtml(ts) + '</div>' :
+          '<div class="placeholder"><p>No integrated summary for this topic yet.</p><p class="hint">Paste or import the LLM summary that compares all the studies in this topic.</p></div>') +
+        '<div class="paper-actions">' +
+        '<button class="btn" data-action="edit-topic-summary" type="button">' + (ts.trim() ? 'Edit integrated summary' : 'Paste integrated summary') + '</button>' +
+        '<label class="btn file-label">Import .md file<input id="import-topic-summary" type="file" accept=".md,.txt,.markdown,text/markdown,text/plain" hidden></label>' +
+        '</div></div>';
+    }
+
+    document.getElementById('view').innerHTML = html;
+  }
+
+  function renderLinkPaper(p, t, d) {
+    currentPaperId = p.id;
+    setHeader('Link resource', true);
+    const link = getPaperLink(p);
     document.getElementById('view').innerHTML =
-      '<h2>' + esc(t.name) + '</h2>' +
-      '<div class="toolbar">' +
-      '<select id="sort-select" class="select">' + sortOptions + '</select>' +
-      '<select id="society-select" class="select">' + societyOptions + '</select>' +
-      '<select id="status-select" class="select">' + statusOptions + '</select></div>' +
-      (mode === 'custom' ? '<p class="hint">Tap and hold the ⠿ handle to drag and reorder. Order is saved automatically.</p>' : '') +
-      '<div id="paper-list" class="paper-list">' +
-      papers.map(p => {
-        const m = state.papers[p.id] || {};
-        const st = readStatus(p);
-        const up = hasContent(p);
-        return '<div class="paper-row" data-pid="' + p.id + '">' +
-          (mode === 'custom' ? '<span class="drag-handle" aria-hidden="true">⠿</span>' : '') +
-          '<a class="paper-main" href="#/paper/' + p.id + '">' +
-          '<span class="paper-title">' + esc(p.title) + '</span>' +
-          '<span class="paper-chips">' +
-          '<span class="chip society">' + esc(p.society) + '</span>' +
-          (p.year ? '<span class="chip year">' + p.year + '</span>' : '') +
-          p.tags.map(tag => '<span class="chip tag">' + (tag === '★' ? '★' : esc(tag)) + '</span>').join('') +
-          '<span class="chip status-' + st + '">' + statusLabel(st) + '</span>' +
-          (up ? '<span class="chip uploaded">Uploaded</span>' : '<span class="chip blank">Blank</span>') +
-          '</span>' +
-          '<span class="paper-dates">Reviewed: ' + fmtDate(m.lastReviewed) + ' · Opened: ' + fmtDate(m.lastOpened) + '</span>' +
-          '</a></div>';
-      }).join('') + '</div>' +
-      (papers.length === 0 ? '<p class="hint">No studies match the filter.</p>' : '');
-
-    if (mode === 'custom') enableCustomDrag(document.getElementById('paper-list'), t.id);
+      '<div class="paper-head">' +
+      '<p class="breadcrumb">' + esc(d.name) + ' › ' + esc(t.name) + '</p>' +
+      '<h2>' + esc(p.title) + '</h2>' +
+      '<div class="paper-chips">' +
+      '<span class="chip society">' + esc(p.society) + '</span>' +
+      (p.year ? '<span class="chip year">' + p.year + '</span>' : '') +
+      p.tags.map(tag => '<span class="chip tag">' + (tag === '★' ? '★ Core' : esc(tag)) + '</span>').join('') +
+      (link ? '<span class="chip uploaded">Link saved</span>' : '<span class="chip blank">No link yet</span>') +
+      '</div>' +
+      '<p class="hint" style="margin-top:12px">This is a link-only resource. Paste the URL below and open it whenever you need to look it up online.</p>' +
+      '<div class="editor" style="margin-top:12px">' +
+      '<input id="core-link-input" class="text-input" type="text" placeholder="https://..." value="' + esc(link) + '">' +
+      '<button id="btn-core-save" class="btn primary" type="button">Save link</button>' +
+      (link ? '<a class="btn" href="' + esc(link) + '" target="_blank" rel="noopener">Open link ↗</a>' : '') +
+      '</div></div>';
   }
 
   function renderPaper(id) {
     const p = findPaper(id);
     if (!p) { location.hash = '#/'; return; }
+    const t = paperTopic(p);
+    const d = findDomainByTopic(t.id);
+    if (d && d.id === 'core') { renderLinkPaper(p, t, d); return; }
     currentPaperId = id;
     setHeader(p.society + ' · ' + (p.year || 'n.d.'), true);
     const m = meta(id);
     m.lastOpened = Date.now();
     save();
-    const t = paperTopic(p);
-    const d = findDomainByTopic(t.id);
     const st = readStatus(p);
     const up = hasContent(p);
 
@@ -464,6 +546,7 @@
 
   function buildActivityRows() {
     const rows = allPapers().map(p => {
+      if (isLinkOnlyPaper(p)) return null;
       const m = state.papers[p.id] || {};
       return {
         p, topic: paperTopic(p),
@@ -471,7 +554,7 @@
         lastReviewed: m.lastReviewed || null,
         lastOpened: m.lastOpened || null
       };
-    });
+    }).filter(Boolean);
     rows.sort((a, b) => {
       const tier = a.uploaded ? (a.lastReviewed ? 2 : 1) : 3;
       const tierB = b.uploaded ? (b.lastReviewed ? 2 : 1) : 3;
@@ -564,13 +647,15 @@
     toast('Marked as reviewed today');
     render();
   }
-  function openEditor(paperId, field) {
-    editing = { paper: paperId, field };
-    const label = field === 'summary' ? 'Summary' : 'Full text (verbatim)';
+  function openEditor(target) {
+    editing = target;
+    const isTopic = !!target.topic;
+    const label = isTopic ? 'Integrated topic summary' : (target.field === 'summary' ? 'Summary' : 'Full text (verbatim)');
+    const val = isTopic ? topicSummary(target.topic) : (meta(target.paper)[target.field] || '');
     setHeader('Edit: ' + label, true);
     document.getElementById('view').innerHTML =
       '<div class="editor"><p class="hint">Paste Markdown below. It is saved only on this device.</p>' +
-      '<textarea id="editor-text" rows="18">' + esc(meta(paperId)[field] || '') + '</textarea>' +
+      '<textarea id="editor-text" rows="18">' + esc(val) + '</textarea>' +
       '<label class="check"><input type="checkbox" id="editor-preview"> Show preview</label>' +
       '<div id="editor-preview-box" class="markdown hidden"></div>' +
       '<div class="editor-actions"><button id="editor-cancel" class="btn" type="button">Cancel</button>' +
@@ -578,10 +663,16 @@
   }
   function saveEditor() {
     const val = document.getElementById('editor-text').value;
-    meta(editing.paper)[editing.field] = val;
+    if (editing.topic) {
+      if (!state.topicContent[editing.topic]) state.topicContent[editing.topic] = {};
+      state.topicContent[editing.topic].summary = val;
+      currentTopicTab = 'summary';
+    } else {
+      meta(editing.paper)[editing.field] = val;
+    }
     save();
     toast('Saved');
-    location.hash = '#/paper/' + editing.paper;
+    location.hash = editing.topic ? '#/topic/' + editing.topic : '#/paper/' + editing.paper;
   }
   function importPaperFile(paperId, field, input) {
     const file = input.files && input.files[0];
@@ -595,6 +686,30 @@
     };
     reader.onerror = () => toast('Could not read file');
     reader.readAsText(file);
+  }
+  function importTopicFile(topicId, input) {
+    const file = input.files && input.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (!state.topicContent[topicId]) state.topicContent[topicId] = {};
+      state.topicContent[topicId].summary = String(reader.result || '');
+      save();
+      toast('Imported ' + file.name);
+      currentTopicTab = 'summary';
+      render();
+    };
+    reader.onerror = () => toast('Could not read file');
+    reader.readAsText(file);
+  }
+  function saveCoreLink() {
+    const val = document.getElementById('core-link-input').value.trim();
+    if (!val) { toast('Paste a URL first'); return; }
+    if (!/^https?:\/\//i.test(val)) { toast('URL must start with http:// or https://'); return; }
+    state.links[currentPaperId] = val;
+    save();
+    toast('Link saved');
+    render();
   }
   function exportData() {
     const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
@@ -695,15 +810,21 @@
       document.getElementById('tab-full').classList.toggle('hidden', tab.dataset.tab !== 'full');
       return;
     }
+    const topicTabBtn = e.target.closest('[data-topic-tab]');
+    if (topicTabBtn) { currentTopicTab = topicTabBtn.dataset.topicTab; renderTopic(currentTopicId); return; }
     if (e.target.closest('#btn-review')) { markReviewed(currentPaperId); return; }
+    if (e.target.closest('#btn-core-save')) { saveCoreLink(); return; }
     if (e.target.closest('#btn-install')) { installApp(); return; }
     if (e.target.closest('#btn-export')) { exportData(); return; }
     if (e.target.closest('#btn-reload')) { location.reload(); return; }
     if (e.target.closest('#btn-reset')) { resetData(); return; }
-    if (e.target.closest('#editor-cancel')) { location.hash = '#/paper/' + editing.paper; return; }
+    if (e.target.closest('#editor-cancel')) { location.hash = editing.topic ? '#/topic/' + editing.topic : '#/paper/' + editing.paper; return; }
     if (e.target.closest('#editor-save')) { saveEditor(); return; }
     const editBtn = e.target.closest('[data-action]');
-    if (editBtn) { openEditor(currentPaperId, editBtn.dataset.action === 'edit-summary' ? 'summary' : 'fullText'); }
+    if (editBtn) {
+      if (editBtn.dataset.action === 'edit-topic-summary') openEditor({ topic: currentTopicId, field: 'summary' });
+      else openEditor({ paper: currentPaperId, field: editBtn.dataset.action === 'edit-summary' ? 'summary' : 'fullText' });
+    }
   });
 
   document.getElementById('view').addEventListener('change', e => {
@@ -716,6 +837,7 @@
     if (e.target.id === 'import-file') { importData(e.target); return; }
     if (e.target.id === 'import-summary') { importPaperFile(currentPaperId, 'summary', e.target); return; }
     if (e.target.id === 'import-full') { importPaperFile(currentPaperId, 'fullText', e.target); return; }
+    if (e.target.id === 'import-topic-summary') { importTopicFile(currentTopicId, e.target); return; }
     if (e.target.id === 'sort-select') { state.sortModes[currentTopicId] = e.target.value; save(); renderTopic(currentTopicId); return; }
     if (e.target.id === 'society-select') { state.topicFilters[currentTopicId] = Object.assign({}, state.topicFilters[currentTopicId], { society: e.target.value }); save(); renderTopic(currentTopicId); return; }
     if (e.target.id === 'status-select') { state.topicFilters[currentTopicId] = Object.assign({}, state.topicFilters[currentTopicId], { status: e.target.value }); save(); renderTopic(currentTopicId); return; }
