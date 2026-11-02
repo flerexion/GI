@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Generate app icons</title>
+<style>
+  body { font-family: system-ui, sans-serif; padding: 24px; text-align: center; background: #f5f8f6; color: #12211b; }
+  canvas { border: 1px solid #ccc; margin: 12px auto; display: block; }
+  button { padding: 12px 18px; font-size: 15px; font-weight: 700; border-radius: 12px; border: none; background: #0b3d2e; color: #fff; cursor: pointer; margin: 6px; }
+</style>
+</head>
+<body>
+  <h1>Generate app icons</h1>
+  <p>Click each button to download a PNG icon, then upload both files to your repository root on GitHub.</p>
+  <canvas id="c512" width="512" height="512"></canvas>
+  <button onclick="downloadIcon(512)">Download 512×512 icon</button>
+  <canvas id="c192" width="192" height="192"></canvas>
+  <button onclick="downloadIcon(192)">Download 192×192 icon</button>
+  <script>
+    function drawIcon(size) {
+      const c = document.getElementById('c' + size);
+      const x = c.getContext('2d');
+      const g = x.createLinearGradient(0, 0, size, size);
+      g.addColorStop(0, '#0b3d2e');
+      g.addColorStop(1, '#2f9e6e');
+      const r = Math.round(size * 0.18);
+      x.beginPath();
+      x.moveTo(r, 0); x.lineTo(size - r, 0); x.arcTo(size, 0, size, size, r);
+      x.lineTo(size, size - r); x.arcTo(size, size, 0, size, r);
+      x.lineTo(0, size - r); x.arcTo(0, size, 0, 0, r);
+      x.lineTo(0, r); x.arcTo(0, 0, size, 0, r); x.closePath();
+      x.fillStyle = g; x.fill();
+      x.fillStyle = '#fff';
+      x.font = 'bold ' + Math.round(size * 0.44) + 'px system-ui, sans-serif';
+      x.textAlign = 'center'; x.textBaseline = 'middle';
+      x.fillText('GI', size / 2, size / 2);
+    }
+    function downloadIcon(size) {
+      drawIcon(size);
+      const c = document.getElementById('c' + size);
+      const a = document.createElement('a');
+      a.href = c.toDataURL('image/png');
+      a.download = 'icon-' + size + '.png';
+      a.click();
+    }
+    drawIcon(512);
+    drawIcon(192);
+  </script>
+</body>
+</html>

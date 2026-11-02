@@ -1,0 +1,741 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>GI Fellowship Study</title>
+<meta name="description" content="A personal, offline GI literature library and study tracker.">
+<meta name="theme-color" content="#0b3d2e">
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="icon" href="./icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="./icon-192.png">
+<style>
+  :root {
+    --bg: #f5f8f6;
+    --surface: #ffffff;
+    --text: #12211b;
+    --muted: #5c7065;
+    --primary: #0b3d2e;
+    --primary2: #0e5240;
+    --accent: #2f9e6e;
+    --border: #dfe8e3;
+    --shadow: 0 6px 20px rgba(11, 61, 46, .07);
+    --radius: 16px;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; padding: 0; }
+  body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--text); line-height: 1.45; }
+  .hidden { display: none !important; }
+  .hint, .muted { color: var(--muted); }
+  .hint { font-size: 13px; }
+
+  .app-header { background: linear-gradient(135deg, #0b3d2e, #0e5240); color: #fff; position: sticky; top: 0; z-index: 20; }
+  .header-inner { max-width: 760px; margin: 0 auto; padding: 14px 16px; display: flex; align-items: center; gap: 12px; }
+  #back-btn { background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.3); color: #fff; border-radius: 10px; padding: 8px 12px; font-size: 17px; cursor: pointer; }
+  #header-title { font-size: 17px; font-weight: 800; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin: 0; }
+
+  main { max-width: 760px; margin: 0 auto; padding: 18px 16px calc(90px + env(safe-area-inset-bottom)); }
+  h2 { margin: 0 0 14px; font-size: 21px; }
+
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; width: 100%; padding: 13px 16px; border-radius: 14px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font-size: 15px; font-weight: 700; cursor: pointer; text-decoration: none; }
+  .btn.primary { background: var(--primary); border-color: var(--primary); color: #fff; }
+  .btn.danger { background: #fff; border-color: #f0c4bd; color: #b3261e; }
+  .btn.block { margin-top: 12px; }
+
+  .chip { display: inline-flex; align-items: center; padding: 3px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; line-height: 1.4; background: #eef3f0; color: #39554a; }
+  .chip.society { background: #e8f0fb; color: #1f5faa; }
+  .chip.year { background: #f1f3f8; color: #5a6478; }
+  .chip.tag { background: #fff3d6; color: #8a6500; }
+  .chip.uploaded { background: #e6f4ec; color: #1e7b4f; }
+  .chip.blank { background: #f1f0ee; color: #8a7f74; }
+  .chip.status-unread { background: #f1f0ee; color: #6d645b; }
+  .chip.status-inprogress { background: #fff3d6; color: #8a6500; }
+  .chip.status-reviewed { background: #e6f4ec; color: #1e7b4f; }
+
+  .domain-list, .topic-list, .paper-list { display: flex; flex-direction: column; gap: 10px; }
+  .domain-card, .topic-card { display: flex; align-items: center; gap: 14px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; text-decoration: none; color: var(--text); box-shadow: var(--shadow); }
+  .domain-icon { font-size: 26px; }
+  .domain-body { flex: 1; display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+  .domain-name { font-weight: 800; }
+  .domain-meta { font-size: 12px; color: var(--muted); }
+  .arrow { color: var(--muted); font-size: 22px; }
+
+  .topic-card { flex-direction: column; align-items: flex-start; gap: 5px; }
+  .topic-name { font-weight: 800; }
+
+  .toolbar { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+  .select { flex: 1; min-width: 130px; padding: 10px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); font: inherit; color: var(--text); }
+
+  .paper-row { display: flex; align-items: stretch; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow); overflow: hidden; }
+  .drag-handle { display: grid; place-items: center; width: 38px; color: var(--muted); font-size: 20px; cursor: grab; touch-action: none; background: #f0f5f2; border-right: 1px solid var(--border); flex-shrink: 0; }
+  .paper-row.dragging { opacity: .5; box-shadow: 0 10px 30px rgba(11, 61, 46, .25); }
+  .paper-main { flex: 1; display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; text-decoration: none; color: var(--text); min-width: 0; }
+  .paper-title { font-weight: 700; }
+  .paper-chips { display: flex; flex-wrap: wrap; gap: 5px; }
+  .paper-dates { font-size: 12px; color: var(--muted); }
+
+  .paper-head { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; box-shadow: var(--shadow); margin-bottom: 14px; }
+  .breadcrumb { margin: 0 0 6px; font-size: 12px; color: var(--muted); }
+  .paper-head h2 { margin: 0 0 10px; font-size: 19px; }
+  .paper-actions { display: flex; gap: 10px; margin-top: 12px; }
+  .paper-actions .btn { flex: 1; }
+
+  .tabs { display: flex; gap: 8px; margin-top: 14px; }
+  .tab { flex: 1; padding: 10px; border: 1px solid var(--border); background: var(--surface); border-radius: 12px 12px 0 0; font-weight: 700; cursor: pointer; color: var(--muted); }
+  .tab.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+  .tab-panel { background: var(--surface); border: 1px solid var(--border); border-top: none; border-radius: 0 0 14px 14px; padding: 14px; }
+
+  .markdown { overflow-wrap: break-word; }
+  .markdown h1, .markdown h2, .markdown h3, .markdown h4 { margin: 16px 0 8px; line-height: 1.25; }
+  .markdown h1 { font-size: 20px; }
+  .markdown h2 { font-size: 18px; }
+  .markdown h3 { font-size: 16px; }
+  .markdown p { margin: 8px 0; }
+  .markdown ul, .markdown ol { margin: 8px 0; padding-left: 22px; }
+  .markdown li { margin: 4px 0; }
+  .markdown blockquote { margin: 10px 0; padding: 8px 12px; border-left: 4px solid var(--accent); background: #f0f8f4; border-radius: 0 10px 10px 0; }
+  .markdown code { background: #f0f2f1; padding: 2px 5px; border-radius: 6px; font-size: 13px; }
+  .markdown pre { background: #10201a; color: #e8f0ec; padding: 12px; border-radius: 12px; overflow-x: auto; }
+  .markdown pre code { background: none; color: inherit; }
+  .markdown table { width: 100%; border-collapse: collapse; margin: 10px 0; display: block; overflow-x: auto; }
+  .markdown th, .markdown td { border: 1px solid var(--border); padding: 8px; text-align: left; font-size: 14px; }
+  .markdown th { background: #f0f5f2; }
+  .markdown a { color: var(--primary2); }
+
+  .placeholder { text-align: center; padding: 30px 14px; color: var(--muted); background: #f8faf9; border: 1px dashed var(--border); border-radius: 12px; margin-bottom: 12px; }
+
+  .editor { display: flex; flex-direction: column; gap: 10px; }
+  .editor textarea { width: 100%; padding: 12px; border: 1px solid var(--border); border-radius: 12px; font: 14px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: var(--surface); }
+  .editor-actions { display: flex; gap: 10px; }
+  .check { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+
+  .table-wrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow); }
+  .activity-table { border-collapse: collapse; width: 100%; min-width: 640px; font-size: 14px; }
+  .activity-table th, .activity-table td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  .activity-table th { background: #f0f5f2; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+  .activity-table tr:last-child td { border-bottom: none; }
+
+  .settings-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; margin-bottom: 12px; box-shadow: var(--shadow); }
+  .file-label { cursor: pointer; }
+
+  .tabbar { position: fixed; bottom: 0; left: 0; right: 0; z-index: 30; display: flex; background: rgba(255,255,255,.96); backdrop-filter: blur(10px); border-top: 1px solid var(--border); padding-bottom: env(safe-area-inset-bottom); }
+  .tabbar button { flex: 1; padding: 12px 6px; background: none; border: none; color: var(--muted); font-weight: 700; font-size: 13px; cursor: pointer; }
+  .tabbar button.active { color: var(--primary); }
+
+  #toast { position: fixed; left: 50%; bottom: 90px; transform: translateX(-50%) translateY(20px); background: #10201a; color: #fff; padding: 10px 16px; border-radius: 999px; font-size: 14px; opacity: 0; pointer-events: none; transition: all .25s; z-index: 50; max-width: 90%; text-align: center; }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+  <header class="app-header">
+    <div class="header-inner">
+      <button id="back-btn" class="hidden" type="button" aria-label="Back">‹</button>
+      <h1 id="header-title">GI Fellowship Study</h1>
+    </div>
+  </header>
+
+  <main id="view"></main>
+
+  <nav class="tabbar">
+    <button type="button" data-screen="home" class="active">Home</button>
+    <button type="button" data-screen="activity">Activity</button>
+    <button type="button" data-screen="settings">Settings</button>
+  </nav>
+
+  <div id="toast" role="status"></div>
+
+  <script src="./data.js"></script>
+  <script>
+  'use strict';
+
+  const STORAGE_KEY = 'gi-literature-v1';
+  const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+  function defaultState() { return { papers: {}, orders: {}, sortModes: {}, topicFilters: {}, activitySort: 'old', activityFilter: 'all' }; }
+  function load() {
+    try { const raw = localStorage.getItem(STORAGE_KEY); if (raw) return Object.assign(defaultState(), JSON.parse(raw)); } catch (e) {}
+    return defaultState();
+  }
+  function save() { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) { toast('Could not save: ' + e.message); } }
+  let state = load();
+
+  let currentTopicId = null;
+  let currentPaperId = null;
+  let editing = { paper: null, field: null };
+  let deferredPrompt = null;
+
+  // ---- helpers ----
+  function findDomain(id) { return DOMAINS.find(d => d.id === id); }
+  function findTopic(id) { for (const d of DOMAINS) { const t = d.topics.find(t => t.id === id); if (t) return t; } return null; }
+  function findPaper(id) { for (const d of DOMAINS) for (const t of d.topics) { const p = t.papers.find(p => p.id === id); if (p) return p; } return null; }
+  function paperTopic(p) { for (const d of DOMAINS) for (const t of d.topics) if (t.papers.some(x => x.id === p.id)) return t; return null; }
+  function findDomainByTopic(tid) { return DOMAINS.find(d => d.topics.some(t => t.id === tid)); }
+  function allPapers() { const arr = []; DOMAINS.forEach(d => d.topics.forEach(t => t.papers.forEach(p => arr.push(p)))); return arr; }
+
+  function meta(paperId) {
+    if (!state.papers[paperId]) state.papers[paperId] = { lastOpened: null, lastReviewed: null, fullText: '', summary: '' };
+    return state.papers[paperId];
+  }
+  function hasContent(p) {
+    const m = state.papers[p.id];
+    return !!(m && (m.fullText || '').trim() || (m && m.summary || '').trim());
+  }
+  function readStatus(p) {
+    const m = state.papers[p.id];
+    if (m && m.lastReviewed) return 'reviewed';
+    if (m && m.lastOpened) return 'inprogress';
+    return 'unread';
+  }
+  function statusLabel(st) { return st === 'reviewed' ? 'Reviewed' : st === 'inprogress' ? 'In progress' : 'Unread'; }
+  function fmtDate(ts) { if (!ts) return '—'; return new Date(ts).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }); }
+  function fmtDateTime(ts) { if (!ts) return '—'; const d = new Date(ts); return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }) + ' ' + d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }); }
+
+  function domainStats(d) {
+    let total = 0, uploaded = 0, reviewed = 0;
+    d.topics.forEach(t => t.papers.forEach(p => { total++; if (hasContent(p)) uploaded++; if (readStatus(p) === 'reviewed') reviewed++; }));
+    return { topics: d.topics.length, total, uploaded, reviewed };
+  }
+  function domainTotals() {
+    let total = 0, uploaded = 0, reviewed = 0;
+    DOMAINS.forEach(d => { const s = domainStats(d); total += s.total; uploaded += s.uploaded; reviewed += s.reviewed; });
+    return { total, uploaded, reviewed };
+  }
+
+  // ---- markdown ----
+  function inline(s) {
+    return esc(s)
+      .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+      .replace(/\*([^*]+)\*/g, '<em>$1</em>')
+      .replace(/`([^`]+)`/g, '<code>$1</code>')
+      .replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+  }
+  function buildTable(rows) {
+    let t = '<table>';
+    rows.forEach((row, ri) => {
+      const cells = row.replace(/^\|/, '').replace(/\|$/, '').split('|');
+      const tag = ri === 0 ? 'th' : 'td';
+      t += '<tr>' + cells.map(c => '<' + tag + '>' + inline(c.trim()) + '</' + tag + '>').join('') + '</tr>';
+    });
+    return t + '</table>';
+  }
+  function mdToHtml(src) {
+    if (!src) return '';
+    const lines = src.replace(/\r\n/g, '\n').split('\n');
+    let html = '';
+    let inCode = false, codeBuf = [];
+    let listType = null;
+    const closeList = () => { if (listType) { html += '</' + listType + '>'; listType = null; } };
+    const isSep = l => /^\s*\|?(\s*:?-{3,}:?\s*\|?)+$/.test(l);
+
+    for (let i = 0; i < lines.length; i++) {
+      const raw = lines[i];
+      const line = raw.trim();
+
+      if (line.startsWith('```')) {
+        if (inCode) { html += '<pre><code>' + esc(codeBuf.join('\n')) + '</code></pre>'; codeBuf = []; inCode = false; }
+        else { closeList(); inCode = true; }
+        continue;
+      }
+      if (inCode) { codeBuf.push(raw); continue; }
+
+      if (line.startsWith('|') && i + 1 < lines.length && isSep(lines[i + 1])) {
+        closeList();
+        const rows = [];
+        while (i < lines.length) {
+          const cur = lines[i].trim();
+          if (isSep(cur)) { i++; continue; }
+          if (cur.startsWith('|')) { rows.push(cur); i++; } else break;
+        }
+        html += buildTable(rows);
+        continue;
+      }
+
+      const h = line.match(/^(#{1,4})\s+(.*)$/);
+      if (h) { closeList(); const n = h[1].length; html += '<h' + n + '>' + inline(h[2]) + '</h' + n + '>'; continue; }
+      if (/^(-{3,}|\*{3,})$/.test(line)) { closeList(); html += '<hr>'; continue; }
+      if (line.startsWith('>')) { closeList(); html += '<blockquote>' + inline(line.replace(/^>\s?/, '')) + '</blockquote>'; continue; }
+
+      const ul = line.match(/^[-*]\s+(.*)$/);
+      const ol = line.match(/^\d+[.)]\s+(.*)$/);
+      if (ul || ol) {
+        const type = ul ? 'ul' : 'ol';
+        if (listType !== type) { closeList(); html += '<' + type + '>'; listType = type; }
+        html += '<li>' + inline(ul ? ul[1] : ol[1]) + '</li>';
+        continue;
+      }
+
+      closeList();
+      if (line === '') continue;
+      html += '<p>' + inline(line) + '</p>';
+    }
+    closeList();
+    if (inCode && codeBuf.length) html += '<pre><code>' + esc(codeBuf.join('\n')) + '</code></pre>';
+    return html;
+  }
+
+  // ---- router ----
+  function parseRoute() {
+    const h = location.hash || '#/';
+    let m;
+    if ((m = h.match(/^#\/domain\/([^/]+)/))) return { view: 'domain', id: m[1] };
+    if ((m = h.match(/^#\/topic\/([^/]+)/))) return { view: 'topic', id: m[1] };
+    if ((m = h.match(/^#\/paper\/([^/]+)/))) return { view: 'paper', id: m[1] };
+    if (h.startsWith('#/activity')) return { view: 'activity' };
+    if (h.startsWith('#/settings')) return { view: 'settings' };
+    return { view: 'home' };
+  }
+  function setHeader(title, showBack) {
+    document.getElementById('header-title').textContent = title;
+    document.getElementById('back-btn').classList.toggle('hidden', !showBack);
+  }
+  function setNav(view) {
+    const map = { home: 'home', domain: 'home', topic: 'home', paper: 'home', activity: 'activity', settings: 'settings' };
+    document.querySelectorAll('.tabbar button').forEach(b => b.classList.toggle('active', b.dataset.screen === map[view]));
+  }
+
+  // ---- renderers ----
+  function renderHome() {
+    setHeader('GI Fellowship Study', false);
+    const totals = domainTotals();
+    document.getElementById('view').innerHTML =
+      '<h2>Study Library</h2>' +
+      '<p class="hint">' + totals.total + ' studies · ' + totals.uploaded + ' uploaded · ' + totals.reviewed + ' reviewed</p>' +
+      '<div class="domain-list">' +
+      DOMAINS.map(d => {
+        const s = domainStats(d);
+        return '<a class="domain-card" href="#/domain/' + d.id + '">' +
+          '<span class="domain-icon">' + d.icon + '</span>' +
+          '<span class="domain-body"><span class="domain-name">' + esc(d.name) + '</span>' +
+          '<span class="domain-meta">' + s.topics + ' topics · ' + s.uploaded + '/' + s.total + ' uploaded · ' + s.reviewed + ' reviewed</span></span>' +
+          '<span class="arrow">›</span></a>';
+      }).join('') + '</div>';
+  }
+
+  function renderDomain(id) {
+    const d = findDomain(id);
+    if (!d) { location.hash = '#/'; return; }
+    setHeader(d.name, true);
+    document.getElementById('view').innerHTML =
+      '<h2>' + d.icon + ' ' + esc(d.name) + '</h2>' +
+      '<div class="topic-list">' +
+      d.topics.map(t => {
+        let total = 0, uploaded = 0, reviewed = 0;
+        t.papers.forEach(p => { total++; if (hasContent(p)) uploaded++; if (readStatus(p) === 'reviewed') reviewed++; });
+        return '<a class="topic-card" href="#/topic/' + t.id + '">' +
+          '<span class="topic-name">' + esc(t.name) + '</span>' +
+          '<span class="domain-meta">' + uploaded + '/' + total + ' uploaded · ' + reviewed + ' reviewed</span></a>';
+      }).join('') + '</div>';
+  }
+
+  function sortTopicPapers(t) {
+    const mode = state.sortModes[t.id] || 'uploaded';
+    const arr = t.papers.slice();
+    const m = p => state.papers[p.id] || {};
+    if (mode === 'uploaded') {
+      arr.sort((a, b) => (hasContent(b) ? 1 : 0) - (hasContent(a) ? 1 : 0));
+    } else if (mode === 'lastNew') {
+      arr.sort((a, b) => (m(b).lastOpened || 0) - (m(a).lastOpened || 0));
+    } else if (mode === 'lastOld') {
+      arr.sort((a, b) => (m(a).lastOpened || 0) - (m(b).lastOpened || 0));
+    } else if (mode === 'yearNew') {
+      arr.sort((a, b) => (parseInt(b.year) || 0) - (parseInt(a.year) || 0));
+    } else if (mode === 'society') {
+      arr.sort((a, b) => a.society.localeCompare(b.society));
+    } else if (mode === 'custom') {
+      const order = state.orders[t.id];
+      if (order && order.length) {
+        const map = new Map(order.map((id, i) => [id, i]));
+        arr.sort((a, b) => (map.has(a.id) ? map.get(a.id) : 999) - (map.has(b.id) ? map.get(b.id) : 999));
+      }
+    }
+    return arr;
+  }
+
+  function statusFilter(p, s) {
+    if (s === 'all') return true;
+    if (s === 'uploaded') return hasContent(p);
+    if (s === 'blank') return !hasContent(p);
+    return readStatus(p) === s;
+  }
+
+  function renderTopic(id) {
+    const t = findTopic(id);
+    if (!t) { location.hash = '#/'; return; }
+    currentTopicId = id;
+    setHeader(t.name, true);
+    const mode = state.sortModes[id] || 'uploaded';
+    const filt = state.topicFilters[id] || { society: 'all', status: 'all' };
+    let papers = sortTopicPapers(t).filter(p => statusFilter(p, filt.status));
+    if (filt.society !== 'all') papers = papers.filter(p => p.society === filt.society);
+    const societies = [...new Set(t.papers.map(p => p.society))];
+
+    const sortOptions = [
+      ['uploaded', 'Uploaded first'], ['original', 'Original sequence'], ['lastNew', 'Last opened: newest'],
+      ['lastOld', 'Last opened: oldest'], ['yearNew', 'Year: newest'], ['society', 'Society: A–Z'], ['custom', 'Custom (drag)']
+    ].map(o => '<option value="' + o[0] + '"' + (o[0] === mode ? ' selected' : '') + '>' + o[1] + '</option>').join('');
+
+    const societyOptions = '<option value="all"' + (filt.society === 'all' ? ' selected' : '') + '>All societies</option>' +
+      societies.map(s => '<option value="' + esc(s) + '"' + (filt.society === s ? ' selected' : '') + '>' + esc(s) + '</option>').join('');
+
+    const statusOptions = [
+      ['all', 'All statuses'], ['uploaded', 'Uploaded'], ['blank', 'Not uploaded'], ['unread', 'Unread'], ['inprogress', 'In progress'], ['reviewed', 'Reviewed']
+    ].map(o => '<option value="' + o[0] + '"' + (o[0] === filt.status ? ' selected' : '') + '>' + o[1] + '</option>').join('');
+
+    document.getElementById('view').innerHTML =
+      '<h2>' + esc(t.name) + '</h2>' +
+      '<div class="toolbar">' +
+      '<select id="sort-select" class="select">' + sortOptions + '</select>' +
+      '<select id="society-select" class="select">' + societyOptions + '</select>' +
+      '<select id="status-select" class="select">' + statusOptions + '</select></div>' +
+      (mode === 'custom' ? '<p class="hint">Tap and hold the ⠿ handle to drag and reorder. Order is saved automatically.</p>' : '') +
+      '<div id="paper-list" class="paper-list">' +
+      papers.map(p => {
+        const m = state.papers[p.id] || {};
+        const st = readStatus(p);
+        const up = hasContent(p);
+        return '<div class="paper-row" data-pid="' + p.id + '">' +
+          (mode === 'custom' ? '<span class="drag-handle" aria-hidden="true">⠿</span>' : '') +
+          '<a class="paper-main" href="#/paper/' + p.id + '">' +
+          '<span class="paper-title">' + esc(p.title) + '</span>' +
+          '<span class="paper-chips">' +
+          '<span class="chip society">' + esc(p.society) + '</span>' +
+          (p.year ? '<span class="chip year">' + p.year + '</span>' : '') +
+          p.tags.map(tag => '<span class="chip tag">' + (tag === '★' ? '★' : esc(tag)) + '</span>').join('') +
+          '<span class="chip status-' + st + '">' + statusLabel(st) + '</span>' +
+          (up ? '<span class="chip uploaded">Uploaded</span>' : '<span class="chip blank">Blank</span>') +
+          '</span>' +
+          '<span class="paper-dates">Reviewed: ' + fmtDate(m.lastReviewed) + ' · Opened: ' + fmtDate(m.lastOpened) + '</span>' +
+          '</a></div>';
+      }).join('') + '</div>' +
+      (papers.length === 0 ? '<p class="hint">No studies match the filter.</p>' : '');
+
+    if (mode === 'custom') enableCustomDrag(document.getElementById('paper-list'), t.id);
+  }
+
+  function renderPaper(id) {
+    const p = findPaper(id);
+    if (!p) { location.hash = '#/'; return; }
+    currentPaperId = id;
+    setHeader(p.society + ' · ' + (p.year || 'n.d.'), true);
+    const m = meta(id);
+    m.lastOpened = Date.now();
+    save();
+    const t = paperTopic(p);
+    const d = findDomainByTopic(t.id);
+    const st = readStatus(p);
+    const up = hasContent(p);
+
+    const summaryHtml = m.summary.trim() ? '<div class="markdown">' + mdToHtml(m.summary) + '</div>' : placeholder('summary');
+    const fullHtml = m.fullText.trim() ? '<div class="markdown">' + mdToHtml(m.fullText) + '</div>' : placeholder('full text');
+
+    document.getElementById('view').innerHTML =
+      '<div class="paper-head">' +
+      '<p class="breadcrumb">' + esc(d.name) + ' › ' + esc(t.name) + '</p>' +
+      '<h2>' + esc(p.title) + '</h2>' +
+      '<div class="paper-chips">' +
+      '<span class="chip society">' + esc(p.society) + '</span>' +
+      (p.year ? '<span class="chip year">' + p.year + '</span>' : '') +
+      p.tags.map(tag => '<span class="chip tag">' + (tag === '★' ? '★ Core' : esc(tag)) + '</span>').join('') +
+      '<span class="chip status-' + st + '">' + statusLabel(st) + '</span>' +
+      (up ? '<span class="chip uploaded">Uploaded</span>' : '<span class="chip blank">Not uploaded</span>') +
+      '</div>' +
+      '<div class="paper-dates">Last opened: ' + fmtDateTime(m.lastOpened) + ' · Last reviewed: ' + fmtDate(m.lastReviewed) + '</div>' +
+      '<div class="paper-actions">' +
+      '<button id="btn-review" class="btn primary" type="button">' + (m.lastReviewed ? 'Review again (update date)' : 'Mark as reviewed') + '</button>' +
+      (p.link ? '<a class="btn" href="' + esc(p.link) + '" target="_blank" rel="noopener">Open source ↗</a>' : '') +
+      '</div>' +
+      '<div class="tabs"><button class="tab active" data-tab="summary" type="button">Summary</button>' +
+      '<button class="tab" data-tab="full" type="button">Full text</button></div></div>' +
+      '<div id="tab-summary" class="tab-panel">' + summaryHtml +
+      '<div class="paper-actions">' +
+      '<button class="btn" data-action="edit-summary" type="button">' + (m.summary.trim() ? 'Edit summary' : 'Paste summary') + '</button>' +
+      '<label class="btn file-label">Import .md file<input id="import-summary" type="file" accept=".md,.txt,.markdown,text/markdown,text/plain" hidden></label>' +
+      '</div></div>' +
+      '<div id="tab-full" class="tab-panel hidden">' + fullHtml +
+      '<div class="paper-actions">' +
+      '<button class="btn" data-action="edit-full" type="button">' + (m.fullText.trim() ? 'Edit full text' : 'Paste full text') + '</button>' +
+      '<label class="btn file-label">Import .md file<input id="import-full" type="file" accept=".md,.txt,.markdown,text/markdown,text/plain" hidden></label>' +
+      '</div></div>';
+  }
+
+  function placeholder(kind) {
+    return '<div class="placeholder"><p>No ' + kind + ' uploaded yet.</p><p class="hint">Paste Markdown, or import a .md file from OneDrive.</p></div>';
+  }
+
+  function buildActivityRows() {
+    const rows = allPapers().map(p => {
+      const m = state.papers[p.id] || {};
+      return {
+        p, topic: paperTopic(p),
+        uploaded: !!(m.fullText || '').trim() || !!(m.summary || '').trim(),
+        lastReviewed: m.lastReviewed || null,
+        lastOpened: m.lastOpened || null
+      };
+    });
+    rows.sort((a, b) => {
+      const tier = a.uploaded ? (a.lastReviewed ? 2 : 1) : 3;
+      const tierB = b.uploaded ? (b.lastReviewed ? 2 : 1) : 3;
+      if (tier !== tierB) return tier - tierB;
+      if (tier === 1) {
+        if (!a.lastOpened && !b.lastOpened) return 0;
+        if (!a.lastOpened) return -1;
+        if (!b.lastOpened) return 1;
+        return a.lastOpened - b.lastOpened;
+      }
+      if (tier === 2) return state.activitySort === 'new' ? b.lastReviewed - a.lastReviewed : a.lastReviewed - b.lastReviewed;
+      return 0;
+    });
+    return rows;
+  }
+  function activityFilterRows(r, f) {
+    if (f === 'all') return true;
+    if (f === 'never') return r.uploaded && !r.lastReviewed;
+    if (f === 'reviewed') return r.uploaded && !!r.lastReviewed;
+    if (f === 'blank') return !r.uploaded;
+    return true;
+  }
+  function activityStatus(r) {
+    if (!r.uploaded) return { label: 'Not uploaded', cls: 'blank' };
+    if (r.lastReviewed) return { label: 'Reviewed', cls: 'reviewed' };
+    if (r.lastOpened) return { label: 'In progress', cls: 'inprogress' };
+    return { label: 'Unread', cls: 'unread' };
+  }
+
+  function renderActivity() {
+    setHeader('Activity', false);
+    const rows = buildActivityRows();
+    const filtered = rows.filter(r => activityFilterRows(r, state.activityFilter));
+    const filterOptions = [['all', 'All'], ['never', 'Never reviewed (uploaded)'], ['reviewed', 'Reviewed'], ['blank', 'Not uploaded']]
+      .map(o => '<option value="' + o[0] + '"' + (o[0] === state.activityFilter ? ' selected' : '') + '>' + o[1] + '</option>').join('');
+
+    document.getElementById('view').innerHTML =
+      '<h2>Activity</h2>' +
+      '<p class="hint">Uploaded but never reviewed appear first, then reviewed studies (oldest first), then not-uploaded studies at the bottom.</p>' +
+      '<div class="toolbar">' +
+      '<select id="activity-sort" class="select">' +
+      '<option value="old"' + (state.activitySort === 'old' ? ' selected' : '') + '>Oldest reviewed first</option>' +
+      '<option value="new"' + (state.activitySort === 'new' ? ' selected' : '') + '>Newest reviewed first</option>' +
+      '</select>' +
+      '<select id="activity-filter" class="select">' + filterOptions + '</select></div>' +
+      '<div class="table-wrap"><table class="activity-table">' +
+      '<thead><tr><th>Study</th><th>Topic</th><th>Society</th><th>Year</th><th>Status</th><th>Last reviewed</th></tr></thead><tbody>' +
+      filtered.map(r => {
+        const st = activityStatus(r);
+        return '<tr><td>' + esc(r.p.title) + '</td>' +
+          '<td>' + esc(r.topic ? r.topic.name : '') + '</td>' +
+          '<td>' + esc(r.p.society) + '</td>' +
+          '<td>' + (r.p.year || '—') + '</td>' +
+          '<td><span class="chip status-' + st.cls + '">' + st.label + '</span></td>' +
+          '<td>' + (r.lastReviewed ? fmtDate(r.lastReviewed) : '—') + '</td></tr>';
+      }).join('') + '</tbody></table></div>';
+  }
+
+  function renderSettings() {
+    setHeader('Settings', false);
+    const totals = domainTotals();
+    document.getElementById('view').innerHTML =
+      '<h2>Settings</h2>' +
+      '<div class="settings-card"><p><strong>' + totals.total + '</strong> studies · <strong>' + totals.uploaded + '</strong> uploaded · <strong>' + totals.reviewed + '</strong> reviewed</p>' +
+      '<p class="hint">Data is stored only on this device. Use backup to keep it safe.</p></div>' +
+      '<button id="btn-install" class="btn primary block hidden" type="button">Install app</button>' +
+      '<button id="btn-export" class="btn block" type="button">Backup data (download)</button>' +
+      '<label class="btn block file-label">Restore data (upload backup)<input id="import-file" type="file" accept=".json,application/json" hidden></label>' +
+      '<button id="btn-reload" class="btn block" type="button">Check for updates</button>' +
+      '<button id="btn-reset" class="btn danger block" type="button">Reset all progress</button>' +
+      '<p class="hint">Install: Android Chrome menu → Add to Home screen. iPhone Safari → Share → Add to Home Screen.</p>';
+    if (deferredPrompt) document.getElementById('btn-install').classList.remove('hidden');
+  }
+
+  function render() {
+    const route = parseRoute();
+    setNav(route.view);
+    if (route.view === 'home') renderHome();
+    else if (route.view === 'domain') renderDomain(route.id);
+    else if (route.view === 'topic') renderTopic(route.id);
+    else if (route.view === 'paper') renderPaper(route.id);
+    else if (route.view === 'activity') renderActivity();
+    else if (route.view === 'settings') renderSettings();
+  }
+
+  // ---- actions ----
+  function markReviewed(paperId) {
+    meta(paperId).lastReviewed = Date.now();
+    save();
+    toast('Marked as reviewed today');
+    render();
+  }
+  function openEditor(paperId, field) {
+    editing = { paper: paperId, field };
+    const label = field === 'summary' ? 'Summary' : 'Full text (verbatim)';
+    setHeader('Edit: ' + label, true);
+    document.getElementById('view').innerHTML =
+      '<div class="editor"><p class="hint">Paste Markdown below. It is saved only on this device.</p>' +
+      '<textarea id="editor-text" rows="18">' + esc(meta(paperId)[field] || '') + '</textarea>' +
+      '<label class="check"><input type="checkbox" id="editor-preview"> Show preview</label>' +
+      '<div id="editor-preview-box" class="markdown hidden"></div>' +
+      '<div class="editor-actions"><button id="editor-cancel" class="btn" type="button">Cancel</button>' +
+      '<button id="editor-save" class="btn primary" type="button">Save</button></div></div>';
+  }
+  function saveEditor() {
+    const val = document.getElementById('editor-text').value;
+    meta(editing.paper)[editing.field] = val;
+    save();
+    toast('Saved');
+    location.hash = '#/paper/' + editing.paper;
+  }
+  function importPaperFile(paperId, field, input) {
+    const file = input.files && input.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      meta(paperId)[field] = String(reader.result || '');
+      save();
+      toast('Imported ' + file.name);
+      render();
+    };
+    reader.onerror = () => toast('Could not read file');
+    reader.readAsText(file);
+  }
+  function exportData() {
+    const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'gi-study-backup-' + new Date().toISOString().slice(0, 10) + '.json';
+    a.click();
+  }
+  function importData(input) {
+    const file = input.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const data = JSON.parse(reader.result);
+        if (data && typeof data === 'object' && data.papers) {
+          state = Object.assign(defaultState(), data);
+          save();
+          toast('Backup restored');
+          render();
+        } else toast('Invalid backup file');
+      } catch (err) { toast('Could not read file'); }
+    };
+    reader.readAsText(file);
+  }
+  function resetData() {
+    if (confirm('Reset ALL progress and uploaded content? This cannot be undone.')) {
+      localStorage.removeItem(STORAGE_KEY);
+      state = defaultState();
+      save();
+      toast('Reset complete');
+      render();
+    }
+  }
+  function installApp() {
+    if (deferredPrompt) { deferredPrompt.prompt(); deferredPrompt = null; }
+  }
+  function toast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    clearTimeout(t._timer);
+    t._timer = setTimeout(() => t.classList.remove('show'), 2200);
+  }
+
+  // ---- custom drag reorder ----
+  function enableCustomDrag(list, topicId) {
+    let timer = null;
+    list.addEventListener('pointerdown', e => {
+      const handle = e.target.closest('.drag-handle');
+      if (!handle) return;
+      const row = handle.closest('[data-pid]');
+      if (!row) return;
+      e.preventDefault();
+      timer = setTimeout(() => startDrag(list, row, topicId), 300);
+      const cancel = () => { clearTimeout(timer); };
+      handle.addEventListener('pointerup', cancel, { once: true });
+      handle.addEventListener('pointercancel', cancel, { once: true });
+    });
+  }
+  function startDrag(list, row, topicId) {
+    row.classList.add('dragging');
+    const onMove = e => {
+      e.preventDefault();
+      const el = document.elementFromPoint(e.clientX, e.clientY);
+      const target = el && el.closest('[data-pid]');
+      if (target && target !== row && target.parentElement === list) {
+        const r = target.getBoundingClientRect();
+        if (e.clientY < r.top + r.height / 2) list.insertBefore(row, target);
+        else list.insertBefore(row, target.nextSibling);
+      }
+    };
+    const onUp = () => {
+      row.classList.remove('dragging');
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      const order = [...list.querySelectorAll('[data-pid]')].map(x => x.dataset.pid);
+      state.orders[topicId] = order;
+      save();
+      toast('Order saved');
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+  }
+
+  // ---- events ----
+  document.getElementById('back-btn').addEventListener('click', () => history.back());
+  document.querySelectorAll('.tabbar button').forEach(b => b.addEventListener('click', () => {
+    const map = { home: '#/', activity: '#/activity', settings: '#/settings' };
+    location.hash = map[b.dataset.screen];
+  }));
+
+  document.getElementById('view').addEventListener('click', e => {
+    const tab = e.target.closest('[data-tab]');
+    if (tab) {
+      document.querySelectorAll('[data-tab]').forEach(b => b.classList.toggle('active', b === tab));
+      document.getElementById('tab-summary').classList.toggle('hidden', tab.dataset.tab !== 'summary');
+      document.getElementById('tab-full').classList.toggle('hidden', tab.dataset.tab !== 'full');
+      return;
+    }
+    if (e.target.closest('#btn-review')) { markReviewed(currentPaperId); return; }
+    if (e.target.closest('#btn-install')) { installApp(); return; }
+    if (e.target.closest('#btn-export')) { exportData(); return; }
+    if (e.target.closest('#btn-reload')) { location.reload(); return; }
+    if (e.target.closest('#btn-reset')) { resetData(); return; }
+    if (e.target.closest('#editor-cancel')) { location.hash = '#/paper/' + editing.paper; return; }
+    if (e.target.closest('#editor-save')) { saveEditor(); return; }
+    const editBtn = e.target.closest('[data-action]');
+    if (editBtn) { openEditor(currentPaperId, editBtn.dataset.action === 'edit-summary' ? 'summary' : 'fullText'); }
+  });
+
+  document.getElementById('view').addEventListener('change', e => {
+    if (e.target.id === 'editor-preview') {
+      const box = document.getElementById('editor-preview-box');
+      box.classList.toggle('hidden', !e.target.checked);
+      if (e.target.checked) box.innerHTML = mdToHtml(document.getElementById('editor-text').value);
+      return;
+    }
+    if (e.target.id === 'import-file') { importData(e.target); return; }
+    if (e.target.id === 'import-summary') { importPaperFile(currentPaperId, 'summary', e.target); return; }
+    if (e.target.id === 'import-full') { importPaperFile(currentPaperId, 'fullText', e.target); return; }
+    if (e.target.id === 'sort-select') { state.sortModes[currentTopicId] = e.target.value; save(); renderTopic(currentTopicId); return; }
+    if (e.target.id === 'society-select') { state.topicFilters[currentTopicId] = Object.assign({}, state.topicFilters[currentTopicId], { society: e.target.value }); save(); renderTopic(currentTopicId); return; }
+    if (e.target.id === 'status-select') { state.topicFilters[currentTopicId] = Object.assign({}, state.topicFilters[currentTopicId], { status: e.target.value }); save(); renderTopic(currentTopicId); return; }
+    if (e.target.id === 'activity-sort') { state.activitySort = e.target.value; save(); renderActivity(); return; }
+    if (e.target.id === 'activity-filter') { state.activityFilter = e.target.value; save(); renderActivity(); }
+  });
+
+  window.addEventListener('beforeinstallprompt', e => {
+    e.preventDefault();
+    deferredPrompt = e;
+    const btn = document.getElementById('btn-install');
+    if (btn) btn.classList.remove('hidden');
+  });
+  window.addEventListener('hashchange', render);
+
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(() => {}));
+  }
+
+  render();
+  </script>
+</body>
+</html>
