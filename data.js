@@ -389,7 +389,7 @@ const DOMAINS = [
       ]},
       { id: 'cir-ph', name: 'Portal Hypertension & Varices', papers: [
         P('aasld-ph-varices-2024', 'Portal Hypertension and Varices in Cirrhosis', 'AASLD', 2024, ['★']),
-        P('baveno-vii-2022', 'Baveno VII: Consensus in Portal Hypertension', 'Baveno', 2022),
+        P('baveno-viii-2026', 'Baveno VIII: Consensus in Portal Hypertension', 'Baveno', 2026),
         P('aasld-tips-embolization', 'TIPS, Variceal Embolization, and Retrograde Transvenous Obliteration in Variceal Hemorrhage', 'AASLD', null),
         P('easl-tips-2025', 'TIPS', 'EASL', 2025)
       ]},
